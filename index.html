@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Toy Picker — Mall Claw Machine</title>
+<style>
+  :root {
+    --deep-red: #4a0d10;
+    --red: #7a1620;
+    --bright-red: #b3202d;
+    --white: #fdf9f6;
+    --cream: #f3e9e4;
+    --gold: #f4c542;
+    --shadow: rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: radial-gradient(ellipse at top, var(--red) 0%, var(--deep-red) 65%, #2c0608 100%);
+    color: var(--white);
+    overflow-x: hidden;
+  }
+
+  .stage {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+    position: relative;
+  }
+
+  /* Marquee sign */
+  .marquee {
+    background: var(--white);
+    color: var(--deep-red);
+    padding: 10px 32px;
+    border-radius: 999px;
+    box-shadow: 0 6px 0 var(--shadow), 0 10px 24px rgba(0,0,0,0.4);
+    letter-spacing: 0.03em;
+    font-size: clamp(20px, 5vw, 32px);
+    font-weight: 700;
+    text-align: center;
+    border: 3px solid var(--gold);
+    margin-bottom: 6px;
+  }
+
+  .subhead {
+    font-size: clamp(13px, 3vw, 16px);
+    opacity: 0.85;
+    margin-bottom: 18px;
+    text-align: center;
+    font-style: italic;
+  }
+
+  /* HUD */
+  .hud {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .hud-chip {
+    background: var(--white);
+    color: var(--deep-red);
+    padding: 8px 18px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 15px;
+    box-shadow: 0 3px 0 var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+    justify-content: center;
+  }
+
+  /* Machine cabinet */
+  .cabinet {
+    background: linear-gradient(180deg, var(--bright-red) 0%, var(--red) 100%);
+    border: 6px solid var(--white);
+    border-radius: 22px;
+    padding: 18px;
+    box-shadow:
+      0 0 0 4px var(--deep-red),
+      0 20px 40px rgba(0,0,0,0.45),
+      inset 0 0 30px rgba(0,0,0,0.2);
+    width: min(94vw, 520px);
+    position: relative;
+  }
+
+  .glass {
+    background: linear-gradient(180deg, #fbeee9 0%, #f0d9d0 100%);
+    border-radius: 14px;
+    border: 4px solid var(--deep-red);
+    position: relative;
+    height: 340px;
+    overflow: hidden;
+  }
+
+  /* Rail + claw */
+  .rail {
+    position: absolute;
+    top: 14px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--deep-red);
+    opacity: 0.5;
+  }
+
+  .claw-unit {
+    position: absolute;
+    top: 14px;
+    width: 64px;
+    margin-left: -32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: left 0.35s ease;
+  }
+
+  .claw-arm {
+    width: 6px;
+    background: linear-gradient(180deg, #3a3a3a, #1c1c1c);
+    transition: height 0.4s ease;
+  }
+
+  .claw-head {
+    width: 46px;
+    height: 30px;
+    position: relative;
+  }
+
+  .claw-jaw {
+    position: absolute;
+    top: 0;
+    width: 8px;
+    height: 26px;
+    background: #2a2a2a;
+    border-radius: 3px;
+    transition: transform 0.25s ease;
+  }
+  .claw-jaw.left { left: 4px; transform-origin: top center; }
+  .claw-jaw.right { right: 4px; transform-origin: top center; }
+  .claw-unit.grabbing .claw-jaw.left { transform: rotate(22deg); }
+  .claw-unit.grabbing .claw-jaw.right { transform: rotate(-22deg); }
+
+  .held-toy {
+    position: absolute;
+    top: 26px;
+    font-size: 26px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .claw-unit.holding .held-toy { opacity: 1; }
+
+  /* Toy bin */
+  .bin {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 190px;
+    background:
+      repeating-linear-gradient(45deg, rgba(179,32,45,0.06) 0 10px, transparent 10px 20px);
+    border-top: 3px dashed rgba(74,13,16,0.3);
+  }
+
+  .toy {
+    position: absolute;
+    font-size: 40px;
+    cursor: default;
+    filter: drop-shadow(0 4px 3px rgba(0,0,0,0.25));
+    transition: transform 0.2s ease, opacity 0.3s ease, top 0.5s ease, left 0.5s ease;
+    user-select: none;
+  }
+  .toy.removed {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    border: none;
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .btn:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  }
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-move {
+    background: var(--white);
+    color: var(--deep-red);
+    min-width: 56px;
+    font-size: 22px;
+  }
+
+  .btn-drop {
+    background: var(--gold);
+    color: var(--deep-red);
+    padding: 14px 32px;
+  }
+
+  .tray-label {
+    margin-top: 22px;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+  }
+
+  .tray {
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    min-height: 46px;
+  }
+
+  .tray-slot {
+    width: 44px;
+    height: 44px;
+    background: var(--white);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 3px 0 var(--shadow);
+  }
+  .tray-slot.empty {
+    background: transparent;
+    border: 2px dashed rgba(253,249,246,0.35);
+    box-shadow: none;
+  }
+
+  .reset-btn {
+    margin-top: 22px;
+    background: transparent;
+    border: 2px solid var(--white);
+    color: var(--white);
+    border-radius: 999px;
+    padding: 10px 22px;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .reset-btn:hover { background: rgba(255,255,255,0.1); }
+
+  /* Result overlay */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20,3,4,0.78);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+  }
+  .overlay.show { display: flex; }
+
+  .result-card {
+    background: var(--white);
+    color: var(--deep-red);
+    border-radius: 20px;
+    padding: 34px 28px;
+    text-align: center;
+    max-width: 340px;
+    width: 100%;
+    position: relative;
+    border: 4px solid var(--gold);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  }
+
+  .result-title {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 8px 0 6px;
+  }
+
+  .result-sub {
+    font-size: 15px;
+    opacity: 0.85;
+    margin-bottom: 20px;
+  }
+
+  .result-btn {
+    background: var(--bright-red);
+    color: var(--white);
+    border: none;
+    border-radius: 12px;
+    padding: 12px 26px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 0 var(--deep-red);
+  }
+  .result-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--deep-red); }
+
+  /* Star burst */
+  .star-wrap {
+    position: relative;
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: -6px;
+  }
+
+  .big-star {
+    font-size: 70px;
+    animation: pop-spin 0.7s cubic-bezier(.34,1.56,.64,1);
+    filter: drop-shadow(0 0 14px var(--gold));
+  }
+
+  @keyframes pop-spin {
+    0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+    60% { transform: scale(1.25) rotate(10deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+
+  .sparkle {
+    position: absolute;
+    font-size: 20px;
+    opacity: 0;
+    animation: sparkle-out 0.9s ease-out forwards;
+  }
+
+  @keyframes sparkle-out {
+    0% { opacity: 0; transform: translate(0,0) scale(0.4); }
+    30% { opacity: 1; }
+    100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(1.1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .big-star, .sparkle, .toy, .claw-unit, .claw-jaw { animation: none !important; transition: none !important; }
+  }
+
+  footer.note {
+    margin-top: 26px;
+    font-size: 12px;
+    opacity: 0.55;
+    text-align: center;
+    max-width: 380px;
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="marquee">🧸 TOY PICKER</div>
+  <div class="subhead">Grab 3 animal toys to win the star!</div>
+
+  <div class="hud">
+    <div class="hud-chip">🐾 Animals: <span id="animalCount">0</span>/3</div>
+    <div class="hud-chip">🎯 Tries left: <span id="triesLeft">5</span></div>
+  </div>
+
+  <div class="cabinet">
+    <div class="glass" id="glass">
+      <div class="rail"></div>
+      <div class="claw-unit" id="clawUnit" style="left:50%;">
+        <div class="claw-arm" id="clawArm" style="height:0px;"></div>
+        <div class="claw-head">
+          <div class="claw-jaw left"></div>
+          <div class="claw-jaw right"></div>
+          <div class="held-toy" id="heldToy"></div>
+        </div>
+      </div>
+      <div class="bin" id="bin"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-move" id="leftBtn" aria-label="Move claw left">◀</button>
+    <button class="btn btn-drop" id="dropBtn">Drop Claw</button>
+    <button class="btn btn-move" id="rightBtn" aria-label="Move claw right">▶</button>
+  </div>
+
+  <div class="tray-label">YOUR TOY TRAY</div>
+  <div class="tray" id="tray"></div>
+
+  <button class="reset-btn" id="resetBtn">Restart Game</button>
+
+  <footer class="note">Move the claw over a toy, then drop it. You have 5 tries — collect at least 3 animal toys to win!</footer>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="result-card">
+    <div class="star-wrap" id="starWrap"></div>
+    <div class="result-title" id="resultTitle">You Win!</div>
+    <div class="result-sub" id="resultSub">You collected 3 animal toys!</div>
+    <button class="result-btn" id="playAgainBtn">Play Again</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const GLASS_WIDTH = 480; // logical width used for positioning math (scaled by container)
+  const TOY_DEFS = [
+    { emoji: '🐧', animal: true },
+    { emoji: '🐧', animal: true },
+    { emoji: '🐻', animal: true },
+    { emoji: '🐰', animal: true },
+    { emoji: '🦊', animal: true },
+    { emoji: '🐼', animal: true },
+    { emoji: '⚽', animal: false },
+    { emoji: '🚗', animal: false },
+    { emoji: '🧱', animal: false },
+    { emoji: '🎈', animal: false },
+  ];
+
+  const MAX_TRIES = 5;
+  const WIN_THRESHOLD = 3;
+
+  const glass = document.getElementById('glass');
+  const bin = document.getElementById('bin');
+  const clawUnit = document.getElementById('clawUnit');
+  const clawArm = document.getElementById('clawArm');
+  const heldToy = document.getElementById('heldToy');
+  const leftBtn = document.getElementById('leftBtn');
+  const rightBtn = document.getElementById('rightBtn');
+  const dropBtn = document.getElementById('dropBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const playAgainBtn = document.getElementById('playAgainBtn');
+  const animalCountEl = document.getElementById('animalCount');
+  const triesLeftEl = document.getElementById('triesLeft');
+  const trayEl = document.getElementById('tray');
+  const overlay = document.getElementById('overlay');
+  const resultTitle = document.getElementById('resultTitle');
+  const resultSub = document.getElementById('resultSub');
+  const starWrap = document.getElementById('starWrap');
+
+  let toys = [];
+  let clawX = 50; // percent
+  let triesLeft = MAX_TRIES;
+  let animalsCollected = 0;
+  let tray = [];
+  let busy = false;
+  let gameOver = false;
+
+  function layoutToys() {
+    const binWidth = glass.clientWidth;
+    const binHeight = 190;
+    const positions = [];
+    const cols = 5;
+    const rows = 2;
+    const padX = binWidth / (cols + 1);
+    const padY = binHeight / (rows + 1);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        positions.push({
+          x: padX * (c + 1) + (Math.random() * 20 - 10),
+          y: padY * (r + 1) + (Math.random() * 14 - 7)
+        });
+      }
+    }
+    return positions;
+  }
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function initToys() {
+    bin.innerHTML = '';
+    const defs = shuffle(TOY_DEFS.slice());
+    const positions = layoutToys();
+    toys = defs.map((def, i) => {
+      const el = document.createElement('div');
+      el.className = 'toy';
+      el.textContent = def.emoji;
+      const pos = positions[i] || { x: 40 + i * 30, y: 100 };
+      el.style.left = pos.x + 'px';
+      el.style.top = pos.y + 'px';
+      bin.appendChild(el);
+      return { ...def, el, x: pos.x, taken: false };
+    });
+  }
+
+  function renderHUD() {
+    animalCountEl.textContent = animalsCollected;
+    triesLeftEl.textContent = triesLeft;
+    dropBtn.disabled = busy || gameOver || triesLeft <= 0;
+    leftBtn.disabled = busy || gameOver;
+    rightBtn.disabled = busy || gameOver;
+  }
+
+  function renderTray() {
+    trayEl.innerHTML = '';
+    for (let i = 0; i < MAX_TRIES; i++) {
+      const slot = document.createElement('div');
+      if (tray[i]) {
+        slot.className = 'tray-slot';
+        slot.textContent = tray[i];
+      } else {
+        slot.className = 'tray-slot empty';
+      }
+      trayEl.appendChild(slot);
+    }
+  }
+
+  function moveClaw(dir) {
+    if (busy || gameOver) return;
+    clawX = Math.max(8, Math.min(92, clawX + dir * 10));
+    clawUnit.style.left = clawX + '%';
+  }
+
+  function findToyUnderClaw() {
+    const glassRect = glass.getBoundingClientRect();
+    const clawPixelX = (clawX / 100) * glassRect.width;
+    let closest = null;
+    let closestDist = Infinity;
+    toys.forEach(t => {
+      if (t.taken) return;
+      const dist = Math.abs(t.x - clawPixelX);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = t;
+      }
+    });
+    // Only grab if reasonably close
+    if (closest && closestDist < 55) return closest;
+    return null;
+  }
+
+  function dropClaw() {
+    if (busy || gameOver || triesLeft <= 0) return;
+    busy = true;
+    renderHUD();
+
+    clawArm.style.height = '150px';
+
+    setTimeout(() => {
+      const target = findToyUnderClaw();
+      clawUnit.classList.add('grabbing');
+
+      setTimeout(() => {
+        triesLeft -= 1;
+
+        if (target) {
+          target.taken = true;
+          target.el.classList.add('removed');
+          heldToy.textContent = target.emoji;
+          clawUnit.classList.add('holding');
+        }
+
+        clawArm.style.height = '0px';
+
+        setTimeout(() => {
+          if (target) {
+            tray.push(target.emoji);
+            if (target.animal) animalsCollected += 1;
+            renderTray();
+          }
+          clawUnit.classList.remove('grabbing', 'holding');
+          heldToy.textContent = '';
+          busy = false;
+          renderHUD();
+          checkGameEnd();
+        }, 420);
+      }, 380);
+    }, 420);
+  }
+
+  function checkGameEnd() {
+    if (gameOver) return;
+    if (animalsCollected >= WIN_THRESHOLD) {
+      endGame(true);
+    } else if (triesLeft <= 0) {
+      endGame(false);
+    }
+  }
+
+  function makeSparkles() {
+    starWrap.innerHTML = '<div class="big-star">⭐</div>';
+    const sparkleEmojis = ['✨', '⭐', '🌟'];
+    for (let i = 0; i < 10; i++) {
+      const s = document.createElement('div');
+      s.className = 'sparkle';
+      s.textContent = sparkleEmojis[i % sparkleEmojis.length];
+      const angle = (Math.PI * 2 * i) / 10;
+      const dist = 70 + Math.random() * 30;
+      s.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+      s.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+      s.style.left = '50%';
+      s.style.top = '50%';
+      s.style.animationDelay = (i * 0.03) + 's';
+      starWrap.appendChild(s);
+    }
+  }
+
+  function endGame(won) {
+    gameOver = true;
+    renderHUD();
+    if (won) {
+      makeSparkles();
+      resultTitle.textContent = 'You Win! 🎉';
+      resultSub.textContent = `You collected ${animalsCollected} animal toys! Great picking!`;
+    } else {
+      starWrap.innerHTML = '<div style="font-size:60px;">🧸</div>';
+      resultTitle.textContent = 'Try Again!';
+      resultSub.textContent = `You collected ${animalsCollected} of ${WIN_THRESHOLD} animal toys. So close — give it another go!`;
+    }
+    setTimeout(() => overlay.classList.add('show'), won ? 150 : 0);
+  }
+
+  function resetGame() {
+    triesLeft = MAX_TRIES;
+    animalsCollected = 0;
+    tray = [];
+    busy = false;
+    gameOver = false;
+    clawX = 50;
+    clawUnit.style.left = '50%';
+    clawArm.style.height = '0px';
+    clawUnit.classList.remove('grabbing', 'holding');
+    heldToy.textContent = '';
+    overlay.classList.remove('show');
+    initToys();
+    renderHUD();
+    renderTray();
+  }
+
+  leftBtn.addEventListener('click', () => moveClaw(-1));
+  rightBtn.addEventListener('click', () => moveClaw(1));
+  dropBtn.addEventListener('click', dropClaw);
+  resetBtn.addEventListener('click', resetGame);
+  playAgainBtn.addEventListener('click', resetGame);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') moveClaw(-1);
+    if (e.key === 'ArrowRight') moveClaw(1);
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); dropClaw(); }
+  });
+
+  window.addEventListener('resize', () => {
+    if (!busy && !gameOver) {
+      // reposition toys proportionally is complex; simplest: keep as is
+    }
+  });
+
+  // init
+  initToys();
+  renderHUD();
+  renderTray();
+})();
+</script>
+
+</body>
+</html>
